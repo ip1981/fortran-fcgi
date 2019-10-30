@@ -5,47 +5,44 @@ program fortran_fcgi
    implicit none
 
    type(DICT_STRUCT), pointer :: dict => null()
-   integer :: unitNo ! unit number  for a scratch file
+   integer :: outUnit
+   character(len=11) :: statusHeader
+   integer :: statusCode
+   integer :: rc
 
-   unitNo = getpid() ! use process ID as unit number
-   open (unit=unitNo, status='scratch')
+   outUnit = getpid()
+
+   open (unit=outUnit, status='scratch')
 
    do while (fcgip_accept_environment_variables() >= 0)
 
-      call fcgip_make_dictionary(dict, unitNo)
-      call respond(dict, unitNo)
-      call fcgip_put_file(unitNo)
+      statusCode = 200
+      call fcgip_make_dictionary(dict, outUnit)
+      call respond(dict, statusCode, outUnit)
+      write(statusHeader, '("Status: ", i3)') statusCode
+      rc = fcgip_put_string(statusHeader//NUL)
+      call fcgip_put_file(outUnit)
 
    end do
 
-   close (unitNo)
-
 contains
 
-   subroutine respond(dict, unitNo)
+   subroutine respond(dict, statusCode, outUnit)
       type(DICT_STRUCT), pointer, intent(in) :: dict
-      integer, intent(in) :: unitNo
+      integer, intent(out) :: statusCode
+      integer, intent(in) :: outUnit
       character(len=80) :: scriptName
-
-      write (unitNo, '(a)') &
-         '<!DOCTYPE html>', &
-         '<html lang="en">', &
-         '<head><meta charset="utf-8" />', &
-         '<title>Fortran FastCGI</title></head>', &
-         '<body>', &
-         '<h1>Fortran FastCGI</h1>'
 
       call cgi_get(dict, 'DOCUMENT_URI', scriptName)
 
       select case (trim(scriptName))
 
          case ('/foo')
-            write (unitNo, '(a)') '<p>foo</p>'
+            write(outUnit, '(a)') scriptName
+         case default
+            statusCode = 404
 
       end select
-
-      write (unitNo, '(a)') '</body>', '</html>'
-
    end subroutine respond
 
 end program fortran_fcgi
